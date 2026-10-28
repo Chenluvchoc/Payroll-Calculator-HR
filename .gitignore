@@ -1,0 +1,26 @@
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+
+# Excel 临时文件
+~$*.xlsx
+~$*.xls
+~$*.csv
+*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 可选依赖：按 README 说明自行下载即可，避免仓库体积膨胀
+assets/vendor/*.js
+
+# 本地私有数据（避免误提交真实考勤）
+private/
+*.local.*

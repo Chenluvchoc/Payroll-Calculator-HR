@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能薪酬考勤系统 · Payroll Calculator HR</title>
+<meta name="description" content="上传考勤表，自动核算迟到/早退/缺卡并生成月度扣款明细，纯本地计算，数据不外传。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧮</text></svg>">
+<style>
+  :root {
+    --brand: #10b981;
+    --brand-dark: #059669;
+    --brand-deep: #064e3b;
+    --brand-mist: #f0fdf4;
+    --brand-line: #d8f0e3;
+    --ink: #374151;
+    --ink-soft: #6b7280;
+    --warn: #f97316;
+    --danger: #ef4444;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 20px 64px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+    background: linear-gradient(180deg, #f0fdf4 0%, #f7fbf8 320px, #ffffff 100%);
+    color: var(--brand-deep);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* ---------- 顶部 ---------- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    background: #fff; border: 1px solid var(--brand-line); border-radius: var(--radius);
+    padding: 14px 20px; box-shadow: 0 2px 10px rgba(6, 78, 59, .04); flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 10px; background: var(--brand);
+    color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .5px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  .brand p { margin: 2px 0 0; font-size: 12px; color: var(--ink-soft); }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tab {
+    font-size: 13px; padding: 7px 14px; border-radius: 999px; color: var(--ink-soft);
+    border: 1px solid transparent; background: #f9fafb; white-space: nowrap;
+  }
+  .tab.active { background: var(--brand-mist); color: var(--brand-dark); border-color: var(--brand); font-weight: 600; }
+  .tab.dim { opacity: .55; }
+  .tab.dim::after { content: "待开发"; font-size: 11px; margin-left: 4px; opacity: .8; }
+
+  /* ---------- 设置区 ---------- */
+  .grid { display: grid; gap: 16px; }
+  .cards-4 { grid-template-columns: repeat(4, 1fr); margin: 18px 0; }
+  .card {
+    background: #fff; border: 1px solid var(--brand-line); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: 0 2px 10px rgba(6, 78, 59, .04);
+  }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: var(--brand-deep); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .card h2 span.hint { font-weight: 400; color: var(--ink-soft); font-size: 11px; }
+  label.field { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+  input[type="number"], input[type="time"] {
+    width: 100%; padding: 9px 12px; font-size: 16px; font-weight: 700; color: var(--brand-dark);
+    border: 1px solid #d1d5db; border-radius: 9px; background: #fff; outline: none;
+    font-family: inherit; transition: border-color .15s, box-shadow .15s;
+  }
+  input[type="number"]:focus, input[type="time"]:focus {
+    border-color: var(--brand); box-shadow: 0 0 0 3px rgba(16, 185, 129, .15);
+  }
+  .tip { font-size: 11px; color: #9ca3af; margin: 8px 0 0; line-height: 1.5; }
+  .switch { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); cursor: pointer; user-select: none; }
+  .switch input { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; }
+
+  /* ---------- 上传区 ---------- */
+  .drop {
+    background: #fff; border: 2px dashed #a7f3d0; border-radius: var(--radius);
+    padding: 34px 20px; text-align: center; cursor: pointer; transition: .18s;
+    margin-bottom: 18px;
+  }
+  .drop:hover, .drop.active { border-color: var(--brand); background: var(--brand-mist); }
+  .drop .icon { font-size: 30px; line-height: 1; }
+  .drop h3 { margin: 12px 0 6px; font-size: 16px; }
+  .drop p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+  .drop-actions { margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .file-input { display: none; }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+    border-radius: 9px; border: 1px solid transparent; cursor: pointer;
+    font-size: 13px; font-weight: 600; padding: 9px 16px; transition: .15s; text-decoration: none;
+  }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 3px 10px rgba(16, 185, 129, .25); }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-ghost { background: #fff; color: var(--brand-dark); border-color: var(--brand-line); }
+  .btn-ghost:hover { background: var(--brand-mist); border-color: var(--brand); }
+
+  /* ---------- 看板 ---------- */
+  .dash { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 4px 0 18px; }
+  .kpi { background: #fff; border: 1px solid var(--brand-line); border-radius: var(--radius); padding: 18px; text-align: center; }
+  .kpi p { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); }
+  .kpi strong { font-size: 26px; font-weight: 700; letter-spacing: -.5px; }
+  .kpi .unit { font-size: 13px; font-weight: 500; color: var(--ink-soft); margin-left: 2px; }
+
+  /* ---------- 结果表 ---------- */
+  .panel { background: #fff; border: 1px solid var(--brand-line); border-radius: var(--radius); overflow: hidden; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--brand-line); flex-wrap: wrap; }
+  .panel-head h2 { margin: 0; font-size: 15px; }
+  .panel-head .sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #ecfdf5; color: var(--brand-deep); font-weight: 600; text-align: left;
+    padding: 11px 14px; white-space: nowrap; border-bottom: 1px solid #c7ebd9; position: sticky; top: 0;
+  }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid #f1f5f3; color: var(--ink); white-space: nowrap; }
+  tbody tr:hover { background: #fafdfb; }
+  tbody tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  th.num { text-align: right; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--ink-soft); }
+  .name { font-weight: 600; color: var(--brand-deep); }
+  .bad { color: var(--danger); font-weight: 700; }
+  .warn { color: var(--warn); font-weight: 700; }
+  .money { color: var(--brand-dark); font-weight: 700; }
+  .zero { color: #d1d5db; }
+  tfoot td { padding: 12px 14px; background: #f8fdfa; font-weight: 700; color: var(--brand-deep); border-top: 1px solid var(--brand-line); }
+
+  .hidden { display: none !important; }
+
+  /* ---------- 提示条 ---------- */
+  .notice {
+    display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; line-height: 1.6;
+    background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+  }
+  .notice.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .notice.ok { background: var(--brand-mist); border-color: var(--brand-line); color: var(--brand-deep); }
+  .notice strong { font-weight: 700; }
+
+  footer { margin-top: 32px; text-align: center; font-size: 12px; color: #9ca3af; line-height: 1.9; }
+  footer a { color: var(--brand-dark); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 860px) {
+    .cards-4 { grid-template-columns: repeat(2, 1fr); }
+    .dash { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 520px) {
+    body { padding: 14px 12px 40px; }
+    .cards-4, .dash { grid-template-columns: 1fr; }
+    .kpi strong { font-size: 22px; }
+  }
+  @media print {
+    body { background: #fff; }
+    .topbar, .cards-4, .drop, .drop-actions, .btn { display: none !important; }
+    .panel { border: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">HR</div>
+      <div>
+        <h1>智能薪酬考勤系统</h1>
+        <p>上传考勤表 → 自动核算迟到早退缺卡 → 一键导出月度扣款明细</p>
+      </div>
+    </div>
+    <div class="tabs">
+      <span class="tab active">考勤自动核算</span>
+      <span class="tab dim">薪酬总表</span>
+      <span class="tab dim">系统设置</span>
+    </div>
+  </div>
+
+  <!-- 核算参数 -->
+  <div class="grid cards-4">
+    <div class="card">
+      <h2>💰 扣款标准</h2>
+      <label class="field" for="penaltyRate">每分钟扣款金额 (元)</label>
+      <input type="number" id="penaltyRate" value="1" min="0" step="0.5" onchange="saveSettings()">
+      <p class="tip">计薪公式：扣款 = (迟到分钟 + 早退分钟) × 系数</p>
+    </div>
+    <div class="card">
+      <h2>🕗 上班时间 <span class="hint">基准线</span></h2>
+      <label class="field" for="workStart">上班打卡时间</label>
+      <input type="time" id="workStart" value="08:00" step="60" onchange="saveSettings()">
+      <p class="tip">晚于该时间视为迟到，按分钟向上取整</p>
+    </div>
+    <div class="card">
+      <h2>🕔 下班时间 <span class="hint">基准线</span></h2>
+      <label class="field" for="workEnd">下班打卡时间</label>
+      <input type="time" id="workEnd" value="17:00" step="60" onchange="saveSettings()">
+      <p class="tip">早于该时间视为早退，超时不额外计算</p>
+    </div>
+    <div class="card">
+      <h2>📅 周末规则</h2>
+      <label class="switch">
+        <input type="checkbox" id="includeWeekend" onchange="saveSettings()">
+        周末打卡也参与核算
+      </label>
+      <p class="tip">默认：周六周日整行跳过（双休或加班），不计天数、不判迟到早退</p>
+    </div>
+  </div>
+
+  <!-- 上传 -->
+  <div class="drop" id="dropZone">
+    <div class="icon">📥</div>
+    <h3>点击选择，或把考勤表拖到这里</h3>
+    <p>支持 .xlsx / .xls / .csv，文件只在本机浏览器解析，不会上传到任何服务器</p>
+    <div class="drop-actions">
+      <button class="btn btn-primary" type="button" id="pickBtn">选择考勤文件</button>
+      <button class="btn btn-ghost" type="button" id="tplBtn">下载空白模板</button>
+    </div>
+    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <div id="message"></div>
+
+  <!-- 看板 -->
+  <div class="dash hidden" id="dashboard">
+    <div class="kpi"><p>参与计薪总人数</p><strong id="totalStaff">0</strong><span class="unit">人</span></div>
+    <div class="kpi"><p>全员异常缺卡</p><strong id="totalMissing" style="color:var(--danger)">0</strong><span class="unit">人次</span></div>
+    <div class="kpi"><p>迟到 + 早退合计</p><strong id="totalMins" style="color:var(--warn)">0</strong><span class="unit">分钟</span></div>
+    <div class="kpi"><p>预计扣款总额</p><strong id="totalPenalty" style="color:var(--brand-dark)">0</strong><span class="unit">元</span></div>
+  </div>
+
+  <!-- 结果 -->
+  <div class="panel hidden" id="resultSection">
+    <div class="panel-head">
+      <div>
+        <h2>📊 月度核算明细</h2>
+        <div class="sub" id="resultSub"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-ghost" type="button" onclick="window.print()">🖨️ 打印</button>
+        <button class="btn btn-primary" type="button" onclick="exportExcel()">⬇️ 导出 Excel</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table id="resultTable">
+        <thead>
+          <tr>
+            <th>序号</th>
+            <th>工号</th>
+            <th>员工姓名</th>
+            <th class="num">有效天数</th>
+            <th class="num">异常缺卡</th>
+            <th class="num">迟到(分)</th>
+            <th class="num">早退(分)</th>
+            <th class="num">扣款合计(元)</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot id="tableFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    数据全程在浏览器本地计算 · 不上传、不留存 ·
+    <a href="https://github.com/Chenluvchoc/Payroll-Calculator-HR" target="_blank" rel="noopener">项目主页</a> ·
+    <a href="templates/考勤导入模板.xlsx" download>下载导入模板</a>
+  </footer>
+</div>
+
+<!-- Excel 解析库：优先走 CDN；加载失败时自动回退到本地 assets/vendor/xlsx.full.min.js（离线可用） -->
+<script>
+  function loadLocalXLSX() {
+    if (window.__xlsxFallback) return;
+    window.__xlsxFallback = true;
+    var s = document.createElement('script');
+    s.src = 'assets/vendor/xlsx.full.min.js';
+    s.onerror = function () {
+      var box = document.getElementById('message');
+      if (box) box.innerHTML = '<div class="notice error"><strong>解析库未加载。</strong>' +
+        '当前无法连接 CDN，且本地未找到 assets/vendor/xlsx.full.min.js。' +
+        '联网后刷新，或把该文件放入 assets/vendor/ 目录即可离线使用。</div>';
+    };
+    document.head.appendChild(s);
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="loadLocalXLSX()"></script>
+<script>
+/* ==========================================================================
+   智能薪酬考勤系统
+   纯前端实现：SheetJS 解析 Excel → 逐行判定迟到/早退/缺卡 → 汇总扣款
+   ========================================================================== */
+
+const LS_KEY = 'payroll-hr-settings';
+
+/* ---------- 参数持久化 ---------- */
+const FIELDS = {
+  rate: document.getElementById('penaltyRate'),
+  start: document.getElementById('workStart'),
+  end: document.getElementById('workEnd'),
+  weekend: document.getElementById('includeWeekend')
+};
+
+function saveSettings() {
+  localStorage.setItem(LS_KEY, JSON.stringify(readSettings()));
+}
+
+function readSettings() {
+  return {
+    rate: Math.max(0, parseFloat(FIELDS.rate.value) || 0),
+    start: FIELDS.start.value || '08:00',
+    end: FIELDS.end.value || '17:00',
+    includeWeekend: FIELDS.weekend.checked
+  };
+}
+
+(function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    if (saved.rate !== undefined) FIELDS.rate.value = saved.rate;
+    if (saved.start) FIELDS.start.value = saved.start;
+    if (saved.end) FIELDS.end.value = saved.end;
+    if (saved.includeWeekend) FIELDS.weekend.checked = true;
+  } catch (e) { /* 忽略损坏的本地配置 */ }
+})();
+
+/* ---------- 值解析（不依赖 Excel 显示格式） ---------- */
+function isBlank(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'number') return false;
+  const text = String(value).trim();
+  return text === '' || text === '-' || text === '—' || text === '/';
+}
+
+/** Excel 日期序列号 → { y, m, d }（用 UTC 计算，规避时区偏移） */
+function serialToDate(serial) {
+  const ms = Math.round((serial - 25569) * 86400) * 1000;
+  const d = new Date(ms);
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+}
+
+/** 日期单元格 → { y, m, d }；无法识别返回 null */
+function parseDate(value) {
+  if (isBlank(value)) return null;
+  if (typeof value === 'number' && isFinite(value)) {
+    return (value > 20000 && value < 80000) ? serialToDate(value) : null;
+  }
+  const text = String(value).trim();
+
+  // 2026-09-01 / 2026/9/1 / 2026.9.1（带时间也兼容）
+  let hit = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (hit) return { y: +hit[1], m: +hit[2], d: +hit[3] };
+
+  // 9/1/26 这类短格式：>12 的那一位判定为「日」，否则按 Excel 默认的「月/日」
+  hit = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if (hit) {
+    const a = +hit[1], b = +hit[2];
+    let y = +hit[3];
+    if (hit[3].length <= 2) y += 2000;
+    if (a > 12 && b <= 12) return { y, m: b, d: a };
+    return { y, m: a, d: b };
+  }
+
+  const fallback = new Date(text);
+  if (!isNaN(fallback.getTime())) {
+    return { y: fallback.getFullYear(), m: fallback.getMonth() + 1, d: fallback.getDate() };
+  }
+  return null;
+}
+
+function dayOfWeek(dateInfo) {
+  if (!dateInfo) return -1;
+  const d = new Date(dateInfo.y, dateInfo.m - 1, dateInfo.d);
+  return isNaN(d.getTime()) ? -1 : d.getDay();
+}
+
+/** 时间单元格 → 秒数；无效返回 -1。支持 "08:05"、"08:05:00"、Excel 时间小数 */
+function timeToSec(value) {
+  if (isBlank(value)) return -1;
+  if (typeof value === 'number' && isFinite(value)) {
+    const frac = value >= 1 ? value - Math.floor(value) : value;   // 可能是“日期+时间”序列号
+    return Math.round(frac * 86400);
+  }
+  let text = String(value).trim();
+  if (text.includes(' ')) text = text.split(' ').pop();            // 去掉前面的日期部分
+  text = text.replace(/[时分秒]/g, ':').replace(/:+$/, '');
+  const parts = text.split(':');
+  if (parts.length < 2) return -1;
+  const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10), s = parseInt(parts[2], 10) || 0;
+  if (isNaN(h) || isNaN(m)) return -1;
+  return h * 3600 + m * 60 + s;
+}
+
+/* ---------- 表头识别（兼容多种考勤机导出列名） ---------- */
+const HEADER_RULES = [
+  { key: 'pid',      patterns: [/^person\s*id$/i, /person\s*id/i, /工号/, /员工编号/, /人员编号/, /编号/, /卡号/] },
+  { key: 'name',     patterns: [/^name$/i, /^姓名$/, /姓名/, /员工姓名/, /人员姓名/] },
+  { key: 'date',     patterns: [/^date$/i, /^日期$/, /日期/, /考勤日期/, /打卡日期/] },
+  { key: 'checkIn',  patterns: [/check[\s-]*in/i, /上班打卡/, /签到/, /上班时间/, /上班/] },
+  { key: 'checkOut', patterns: [/check[\s-]*out/i, /下班打卡/, /签退/, /下班时间/, /下班/] }
+];
+
+/** 单元格文本 → 字段名（pid/name/date/checkIn/checkOut） */
+function matchField(text) {
+  const value = String(text == null ? '' : text).trim();
+  if (!value) return null;
+  for (const rule of HEADER_RULES) {
+    for (const pattern of rule.patterns) {
+      if (pattern.test(value)) return rule.key;
+    }
+  }
+  return null;
+}
+
+/** 一行单元格 → { 字段名: 列下标 } */
+function resolveColumns(headerCells) {
+  const map = {};
+  const taken = new Set();
+  (headerCells || []).forEach((cell, index) => {
+    if (taken.has(index)) return;
+    const field = matchField(cell);
+    if (field && map[field] === undefined) {
+      map[field] = index;
+      taken.add(index);
+    }
+  });
+  return map;
+}
+
+/** 在前 20 行里找出最像表头的那一行（考勤机导出常在顶部带标题行） */
+function locateHeader(matrix) {
+  let best = { row: -1, score: 0, columns: {} };
+  const limit = Math.min(matrix.length, 20);
+  for (let i = 0; i < limit; i++) {
+    const columns = resolveColumns(matrix[i]);
+    const score = Object.keys(columns).length;
+    if (score > best.score) best = { row: i, score, columns };
+    if (score === 5) break;
+  }
+  return best;
+}
+
+/** 把二维表按识别到的表头转成标准行数据 */
+function toRecords(matrix, header) {
+  const { row, columns } = header;
+  const records = [];
+  const pick = (cells, index) => (index === undefined ? undefined : cells[index]);
+  for (let i = row + 1; i < matrix.length; i++) {
+    const cells = matrix[i] || [];
+    records.push({
+      pid: pick(cells, columns.pid),
+      name: pick(cells, columns.name),
+      date: pick(cells, columns.date),
+      checkIn: pick(cells, columns.checkIn),
+      checkOut: pick(cells, columns.checkOut)
+    });
+  }
+  return records;
+}
+
+/* ---------- 上传交互 ---------- */
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+document.getElementById('pickBtn').addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+dropZone.addEventListener('click', () => fileInput.click());
+document.getElementById('tplBtn').addEventListener('click', e => { e.stopPropagation(); downloadTemplate(); });
+fileInput.addEventListener('change', function () { if (this.files.length) handleFile(this.files[0]); this.value = ''; });
+
+['dragenter', 'dragover'].forEach(evt =>
+  dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('active'); }));
+['dragleave', 'drop'].forEach(evt =>
+  dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('active'); }));
+dropZone.addEventListener('drop', e => {
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+function notify(html, type) {
+  const box = document.getElementById('message');
+  box.innerHTML = html ? `<div class="notice ${type || ''}">${html}</div>` : '';
+}
+
+/* ---------- 解析文件 ---------- */
+function handleFile(file) {
+  if (typeof XLSX === 'undefined') {
+    notify('<strong>解析库还在加载。</strong>请稍等一秒重试，或联网刷新页面。', 'error');
+    return;
+  }
+  const name = file.name.toLowerCase();
+  if (!/\.(xlsx|xls|csv)$/.test(name)) {
+    notify('<strong>文件格式不支持。</strong>请上传 .xlsx / .xls / .csv 格式的考勤表。', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onerror = () => notify('<strong>读取失败。</strong>请确认文件未被占用后重试。', 'error');
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+      if (!workbook.SheetNames.length) {
+        notify('<strong>表格是空的。</strong>文件里没有可读取的工作表。', 'error');
+        return;
+      }
+
+      // 遍历工作表，挑出表头识别最完整的那一个（优先匹配 5/5 列）
+      let best = { sheet: null, header: { row: -1, score: 0, columns: {} }, matrix: null };
+      workbook.SheetNames.forEach(sheetName => {
+        const sheet = workbook.Sheets[sheetName];
+        // raw:false 让单元格以显示文本返回，避免时间被 Excel 序列号化
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', blankrows: false });
+        if (!matrix.length) return;
+        const header = locateHeader(matrix);
+        if (header.score > best.header.score) best = { sheet: sheetName, header, matrix };
+      });
+
+      const need = ['pid', 'name', 'date', 'checkIn', 'checkOut'];
+      const missing = need.filter(k => best.header.columns[k] === undefined);
+      if (missing.length) {
+        const label = { pid: '工号', name: '姓名', date: '日期', checkIn: '上班打卡', checkOut: '下班打卡' };
+        notify(`<strong>表头无法识别：</strong>缺少「${missing.map(k => label[k]).join('、')}」列。
+          标准表头为 <code>Person ID | Name | Date | Check-In | Check-out</code>，
+          也兼容「工号 / 姓名 / 日期 / 上班打卡 / 下班打卡」。可先下载空白模板对照。`, 'error');
+        return;
+      }
+
+      const records = toRecords(best.matrix, best.header);
+      if (!records.length) {
+        notify('<strong>没有数据行。</strong>表头下面没有可读取的考勤记录。', 'error');
+        return;
+      }
+      calculate(records, file.name);
+    } catch (err) {
+      console.error(err);
+      notify('<strong>解析出错：</strong>' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---------- 核心核算 ---------- */
+let exportRows = [];
+let lastSummary = {};
+
+function calculate(records, fileName) {
+  const settings = readSettings();
+  const startSec = timeToSec(settings.start);
+  const endSec = timeToSec(settings.end);
+  const staffMap = new Map();
+  let skippedWeekend = 0;
+  let skippedRows = 0;
+
+  records.forEach(row => {
+    const rawPid = row.pid;
+    const rawIn = row.checkIn;
+    const rawOut = row.checkOut;
+
+    // 1. 过滤表头重复行 / 说明行 / 空行 / 日期不可识别的行
+    if (isBlank(rawPid)) { skippedRows++; return; }
+    if (String(rawPid).includes('Check-In')) { skippedRows++; return; }
+
+    const pid = String(rawPid).replace(/['"]/g, '').trim();
+    if (!pid) { skippedRows++; return; }
+
+    const dateInfo = parseDate(row.date);
+    if (!dateInfo) { skippedRows++; return; }
+
+    const name = isBlank(row.name) ? '未填写姓名' : String(row.name).trim();
+
+    const noIn = isBlank(rawIn);
+    const noOut = isBlank(rawOut);
+
+    // 2. 周末过滤：周六周日默认整行跳过（视为双休或加班，不按工作日标准判迟到早退）
+    const weekday = dayOfWeek(dateInfo);
+    if (!settings.includeWeekend && (weekday === 0 || weekday === 6)) {
+      skippedWeekend++;
+      return;
+    }
+
+    // 3. 初始化员工记录
+    if (!staffMap.has(pid)) {
+      staffMap.set(pid, { pid, name, validDays: 0, missing: 0, lateMins: 0, earlyMins: 0 });
+    }
+    const emp = staffMap.get(pid);
+    if (!emp.name || emp.name === '未填写姓名') emp.name = name;
+    emp.validDays++;
+
+    // 4. 缺卡：上班或下班任一侧没有记录
+    if (noIn || noOut) emp.missing++;
+
+    // 5. 迟到：晚于上班基准线，按分钟向上取整
+    if (!noIn) {
+      const inSec = timeToSec(rawIn);
+      if (inSec > startSec) emp.lateMins += Math.ceil((inSec - startSec) / 60);
+    }
+
+    // 6. 早退：早于下班基准线，按分钟向上取整；晚走不抵扣
+    if (!noOut) {
+      const outSec = timeToSec(rawOut);
+      if (outSec >= 0 && outSec < endSec) emp.earlyMins += Math.ceil((endSec - outSec) / 60);
+    }
+  });
+
+  render(staffMap, settings, startSec, endSec, fileName, skippedWeekend, skippedRows);
+}
+
+function fmtTime(sec) {
+  const h = String(Math.floor(sec / 3600)).padStart(2, '0');
+  const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+/* ---------- 渲染 ---------- */
+function render(staffMap, settings, startSec, endSec, fileName, skippedWeekend, skippedRows) {
+  if (!staffMap.size) {
+    notify('<strong>没有可核算的数据。</strong>请检查表头是否为 <code>Person ID / Name / Date / Check-In / Check-out</code>，以及日期列是否有值。', 'error');
+    document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('resultSection').classList.add('hidden');
+    return;
+  }
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  exportRows = [];
+
+  let idx = 0, sumStaff = 0, sumMissing = 0, sumMins = 0, sumPenalty = 0, sumDays = 0;
+
+  const sorted = [...staffMap.values()].sort((a, b) => String(a.pid).localeCompare(String(b.pid), 'zh-CN', { numeric: true }));
+
+  sorted.forEach(emp => {
+    idx++;
+    sumStaff++;
+    sumDays += emp.validDays;
+    sumMissing += emp.missing;
+    const mins = emp.lateMins + emp.earlyMins;
+    sumMins += mins;
+    const penalty = +(mins * settings.rate).toFixed(2);
+    sumPenalty += penalty;
+
+    const tr = document.createElement('tr');
+    const cells = [
+      { text: idx, cls: 'num' },
+      { text: emp.pid, cls: 'mono' },
+      { text: emp.name, cls: 'name' },
+      { text: emp.validDays, cls: 'num' },
+      { text: emp.missing, cls: 'num ' + (emp.missing ? 'bad' : 'zero') },
+      { text: emp.lateMins, cls: 'num ' + (emp.lateMins ? 'warn' : 'zero') },
+      { text: emp.earlyMins, cls: 'num ' + (emp.earlyMins ? 'warn' : 'zero') },
+      { text: '￥' + penalty.toFixed(2), cls: 'num ' + (penalty ? 'money' : 'zero') }
+    ];
+    cells.forEach(c => {
+      const td = document.createElement('td');
+      td.className = c.cls;
+      td.textContent = c.text;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+
+    exportRows.push({
+      '序号': idx,
+      '工号': emp.pid,
+      '员工姓名': emp.name,
+      '有效出勤天数': emp.validDays,
+      '异常缺卡次数': emp.missing,
+      '迟到分钟合计': emp.lateMins,
+      '早退分钟合计': emp.earlyMins,
+      '迟到早退合计(分)': mins,
+      '扣款系数(元/分)': settings.rate,
+      '应扣款金额(元)': penalty
+    });
+  });
+
+  // 合计行
+  const foot = document.getElementById('tableFoot');
+  foot.innerHTML = '';
+  const totalRow = document.createElement('tr');
+  [
+    { text: '合计', cls: '' }, { text: `共 ${sumStaff} 人`, cls: 'mono' }, { text: '', cls: '' },
+    { text: sumDays, cls: 'num' }, { text: sumMissing, cls: 'num' },
+    { text: sorted.reduce((a, e) => a + e.lateMins, 0), cls: 'num' },
+    { text: sorted.reduce((a, e) => a + e.earlyMins, 0), cls: 'num' },
+    { text: '￥' + sumPenalty.toFixed(2), cls: 'num' }
+  ].forEach(c => {
+    const td = document.createElement('td');
+    td.className = c.cls;
+    td.textContent = c.text;
+    totalRow.appendChild(td);
+  });
+  foot.appendChild(totalRow);
+
+  document.getElementById('totalStaff').textContent = sumStaff;
+  document.getElementById('totalMissing').textContent = sumMissing;
+  document.getElementById('totalMins').textContent = sumMins;
+  document.getElementById('totalPenalty').textContent = '￥' + sumPenalty.toFixed(2);
+  document.getElementById('resultSub').textContent =
+    `来源：${fileName} · 上下班基准 ${fmtTime(startSec)}–${fmtTime(endSec)} · 系数 ${settings.rate} 元/分钟` +
+    (skippedWeekend ? ` · 已跳过 ${skippedWeekend} 条周末记录` : '') +
+    (skippedRows ? ` · 已忽略 ${skippedRows} 行无效数据` : '');
+
+  lastSummary = { sumStaff, sumDays, sumMissing, sumMins, sumPenalty, settings, fileName, skippedWeekend, skippedRows };
+
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('resultSection').classList.remove('hidden');
+  notify(`<strong>核算完成。</strong>共 ${sumStaff} 人、${sumDays} 人天，缺卡 ${sumMissing} 人次，预计扣款 ￥${sumPenalty.toFixed(2)}。`, 'ok');
+}
+
+/* ---------- 导出 ---------- */
+function exportExcel() {
+  if (!exportRows.length) return notify('<strong>还没有核算结果。</strong>请先上传考勤表。', 'error');
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1：明细
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  ws['!cols'] = [
+    { wch: 6 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+    { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 14 }
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, '月度核算明细');
+
+  // Sheet 2：汇总说明（便于复核 / 存档）
+  const s = lastSummary;
+  const info = [
+    { '项目': '数据来源', '内容': s.fileName },
+    { '项目': '参与计薪人数', '内容': s.sumStaff + ' 人' },
+    { '项目': '有效出勤人天', '内容': s.sumDays + ' 人天' },
+    { '项目': '异常缺卡人次', '内容': s.sumMissing + ' 人次' },
+    { '项目': '迟到早退合计', '内容': s.sumMins + ' 分钟' },
+    { '项目': '扣款系数', '内容': s.settings.rate + ' 元/分钟' },
+    { '项目': '上下班基准', '内容': s.settings.start + ' – ' + s.settings.end },
+    { '项目': '周末是否参与核算', '内容': s.settings.includeWeekend ? '是' : '否（整行跳过）' },
+    { '项目': '跳过周末记录', '内容': (s.skippedWeekend || 0) + ' 条' },
+    { '项目': '忽略无效行', '内容': (s.skippedRows || 0) + ' 行' },
+    { '项目': '预计扣款总额', '内容': s.sumPenalty.toFixed(2) + ' 元' },
+    { '项目': '生成时间', '内容': new Date().toLocaleString('zh-CN') }
+  ];
+  const wsInfo = XLSX.utils.json_to_sheet(info);
+  wsInfo['!cols'] = [{ wch: 18 }, { wch: 42 }];
+  XLSX.utils.book_append_sheet(wb, wsInfo, '核算参数');
+
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  XLSX.writeFile(wb, `HR考勤薪酬核算表_${stamp}.xlsx`);
+}
+
+/* ---------- 空白模板 ---------- */
+function downloadTemplate() {
+  const header = ['Person ID', 'Name', 'Date', 'Check-In', 'Check-out'];
+  const demo = [
+    ["'1001", '张三', '2026-09-01', '08:00:00', '17:05:00'],
+    ["'1001", '张三', '2026-09-02', '08:12:00', '17:00:00'],
+    ["'1001", '张三', '2026-09-03', '-', '-']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...demo]);
+  ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+  // 工号列设为文本，防止长数字被 Excel 变成科学计数法
+  for (let r = 1; r <= demo.length; r++) {
+    const addr = XLSX.utils.encode_cell({ r, c: 0 });
+    if (ws[addr]) ws[addr].t = 's';
+  }
+
+  const guide = [
+    { '列名': 'Person ID', '中文名': '工号', '是否必填': '必填', '填写说明': "员工唯一编号，纯数字建议前加英文单引号 ' 防止科学计数法" },
+    { '列名': 'Name', '中文名': '姓名', '是否必填': '必填', '填写说明': '员工姓名，同一工号应保持一致' },
+    { '列名': 'Date', '中文名': '日期', '是否必填': '必填', '填写说明': '考勤日期，推荐 YYYY-MM-DD 格式，如 2026-09-01' },
+    { '列名': 'Check-In', '中文名': '上班打卡', '是否必填': '选填', '填写说明': '首次打卡时间 HH:mm:ss；未打卡填 - （将计为缺卡）' },
+    { '列名': 'Check-out', '中文名': '下班打卡', '是否必填': '选填', '填写说明': '末次打卡时间 HH:mm:ss；未打卡填 - （将计为缺卡）' },
+    { '列名': '—', '中文名': '行的含义', '是否必填': '—', '填写说明': '一行 = 一名员工一天，同一员工月度内多行会按工号自动合并' }
+  ];
+  const wsGuide = XLSX.utils.json_to_sheet(guide);
+  wsGuide['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 62 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '考勤明细');
+  XLSX.utils.book_append_sheet(wb, wsGuide, '字段说明');
+  XLSX.writeFile(wb, '考勤导入模板.xlsx');
+}
+</script>
+</body>
+</html>
